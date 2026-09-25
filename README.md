@@ -36,6 +36,16 @@ jev verify "Helmets are optional for adults" \
 
 Exit code was 2: a claim was contradicted. Add `--json` to any command for machine-readable output, or `--dry-run` to see exactly what would be sent without calling the API.
 
+## Use OpenRouter
+
+TypeSafe remains the default. To route a command through OpenRouter, set its key and select the provider:
+
+```bash
+OPENROUTER_API_KEY=sk-or-... jev screen "text to inspect" --provider openrouter
+```
+
+For a shell-wide choice, export `OPENROUTER_API_KEY` and set `JEV_PROVIDER=openrouter`. Jev sends its `jev-latest` alias to OpenRouter's System One endpoint. See [provider configuration](docs/config.md#providers) for details.
+
 ## Commands
 
 Each command has its own page with options, output fields, and examples.
