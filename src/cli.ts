@@ -76,7 +76,7 @@ Exit codes:
 
 Credentials (first found wins unless --provider is set; environment first, then the jev auth login store):
   TYPESAFE_API_KEY                                https://console.typesafe.ai/settings/keys
-  OPENROUTER_API_KEY (sk-or-...)                  OpenRouter Decisions API
+  OPENROUTER_API_KEY (sk-or-...)                  OpenRouter System One API
   CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID    Cloudflare Workers AI
 
 Website: https://jevcli.vectorz.app   Docs: https://docs.typesafe.ai   Per-command help: jev <command> --help`;

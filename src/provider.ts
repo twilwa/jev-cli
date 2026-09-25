@@ -1,4 +1,4 @@
-// Jev transport: TypeSafe direct (default), OpenRouter Decisions, or Cloudflare
+// Jev transport: TypeSafe direct (default), OpenRouter System One, or Cloudflare
 // Workers AI. All speak the {state, questions} -> answers contract; URL, auth,
 // and model slugs differ. Proxies add hops, so direct TypeSafe is the
 // recommended default.
@@ -51,8 +51,8 @@ interface CloudflareBody extends ProxyBody {
 }
 const REFERER = "https://github.com/Nasrallah-AL/jev-cli";
 
-/** OpenRouter has no `latest` alias; map it to the current pinned release. */
-export const OPENROUTER_LATEST = "jev-1.13";
+/** OpenRouter's System One endpoint accepts the Jev alias without its namespace. */
+export const OPENROUTER_LATEST = "jev-latest";
 
 /** Decide which transport to use from explicit choice plus available credentials. */
 export function resolveProvider(env: NodeJS.ProcessEnv, explicit: ProviderName = "auto"): ResolvedProvider {
@@ -156,6 +156,11 @@ export function validateAnswers(
   return got;
 }
 
+function openRouterRequestModel(model: string): string {
+  const alias = model.startsWith("typesafe/") ? model.slice("typesafe/".length) : "";
+  return alias === OPENROUTER_LATEST || alias === "jev-preview" ? alias : model;
+}
+
 const HOP_HOSTS: Record<ResolvedProvider, string> = {
   typesafe: "api.typesafe.ai",
   openrouter: "openrouter.ai",
@@ -224,7 +229,7 @@ export function createAsk(opts: ProviderOptions): AskFn {
     return async (state, questions) => {
       const response = await fetchWithTimeout(
         fetchImpl,
-        "https://openrouter.ai/api/alpha/decisions",
+        "https://openrouter.ai/api/v1/systemone",
         {
           method: "POST",
           headers: {
@@ -233,14 +238,14 @@ export function createAsk(opts: ProviderOptions): AskFn {
             "HTTP-Referer": REFERER,
             "X-Title": USER_AGENT,
           },
-          body: JSON.stringify({ model, state, questions }),
+          body: JSON.stringify({ model: openRouterRequestModel(model), state, questions }),
         },
         opts.timeoutMs,
         opts.signal,
       );
       if (!response.ok) {
         const body = await response.text().catch(() => "");
-        throw new CliError(`OpenRouter decisions API ${response.status}: ${body.slice(0, 300)}`);
+        throw new CliError(`OpenRouter System One API ${response.status}: ${body.slice(0, 300)}`);
       }
       const body = (await response.json()) as ProxyBody;
       return {

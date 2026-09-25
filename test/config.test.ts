@@ -75,6 +75,7 @@ describe("resolution", () => {
       provider: "typesafe",
       timeoutMs: 250,
     });
+    expect(configFromEnv({ JEV_PROVIDER: "OpenRouter" }).provider).toBe("openrouter");
     expect(() => configFromEnv({ JEV_TIMEOUT_MS: "-1" })).toThrow(/positive/);
   });
 

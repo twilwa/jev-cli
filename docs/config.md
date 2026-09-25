@@ -41,9 +41,9 @@ Settings resolve in this order, later wins: built-in defaults, config file, envi
 | --- | --- |
 | `TYPESAFE_API_KEY` | TypeSafe key. Optional when stored with `jev auth login`; takes precedence when set. |
 | `TYPESAFE_BASE_URL` | Alternate TypeSafe endpoint, for proxies or testing |
-| `OPENROUTER_API_KEY` | OpenRouter key (`sk-or-...`), used when no TypeSafe key is present |
+| `OPENROUTER_API_KEY` | OpenRouter key (`sk-or-...`), used by `auto` when no TypeSafe key is present or when OpenRouter is selected |
 | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Workers AI, used when no other key is present. `JEV_CLOUDFLARE_API_TOKEN` takes precedence over `CLOUDFLARE_API_TOKEN`. |
-| `JEV_PROVIDER` | Force `typesafe`, `openrouter`, or `cloudflare` |
+| `JEV_PROVIDER` | Select `typesafe`, `openrouter`, or `cloudflare` instead of `auto` |
 | `JEV_MODEL` | Default model |
 | `JEV_TIMEOUT_MS` | Default per-request timeout |
 | `JEV_FORMAT` | Default output format: `text`, `json`, `jsonl`, `md`, `csv`, `tsv` |
@@ -59,13 +59,13 @@ Settings resolve in this order, later wins: built-in defaults, config file, envi
 | Provider | Notes |
 | --- | --- |
 | TypeSafe (direct) | Recommended. Lowest latency, `jev-latest` alias, pinned versions, automatic retries with backoff. |
-| OpenRouter | Alpha endpoint. Pinned versions only, so `jev-latest` maps to `typesafe/jev-1.13`. Adds a hop. |
+| OpenRouter | System One endpoint (`https://openrouter.ai/api/v1/systemone`). The default `typesafe/jev-latest` alias is sent as `jev-latest`; the response may report a dated model id. Adds a hop. |
 | Cloudflare Workers AI | Single `typesafe/jev` alias, no version pinning. Adds a hop. |
 
-With the default `auto` and no TypeSafe key, an `OPENROUTER_API_KEY` or Cloudflare pair already in your
-environment is enough to route your text through that provider. When that happens jev prints one line on
-stderr naming the host it passes through. Choosing the provider yourself, with `-P` or the config file,
-silences it.
+With `auto`, TypeSafe takes priority when its key is available. If it is not, an `OPENROUTER_API_KEY` or
+Cloudflare pair can resolve the provider automatically. To choose OpenRouter deliberately, pass
+`--provider openrouter`, set `JEV_PROVIDER=openrouter`, or set `provider` in the config file. Automatic
+fallback prints one line on stderr naming the host; explicit selection is quiet.
 
 ## Global flags
 

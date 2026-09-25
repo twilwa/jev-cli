@@ -15,8 +15,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("resolveProvider", () => {
-  test("auto picks typesafe, then openrouter, then cloudflare", () => {
-    expect(resolveProvider({ TYPESAFE_API_KEY: "ts", OPENROUTER_API_KEY: "sk-or-x" })).toBe("typesafe");
+  test("auto prefers typesafe; explicit provider selection overrides it", () => {
+    const both = { TYPESAFE_API_KEY: "ts", OPENROUTER_API_KEY: "sk-or-x" };
+    expect(resolveProvider(both)).toBe("typesafe");
+    expect(resolveProvider(both, "openrouter")).toBe("openrouter");
     expect(resolveProvider({ OPENROUTER_API_KEY: "sk-or-x" })).toBe("openrouter");
     expect(resolveProvider({ CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "a" })).toBe("cloudflare");
     expect(resolveProvider({ JEV_CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "a" })).toBe("cloudflare");
@@ -69,7 +71,8 @@ describe("validateAnswers", () => {
 describe("providerModel", () => {
   test("maps aliases per provider", () => {
     expect(providerModel("typesafe", "jev-latest")).toBe("jev-latest");
-    expect(providerModel("openrouter", "jev-latest")).toBe(`typesafe/${OPENROUTER_LATEST}`);
+    expect(OPENROUTER_LATEST).toBe("jev-latest");
+    expect(providerModel("openrouter", "jev-latest")).toBe("typesafe/jev-latest");
     expect(providerModel("openrouter", "jev-1.12")).toBe("typesafe/jev-1.12");
     expect(providerModel("openrouter", "typesafe/jev-1.12")).toBe("typesafe/jev-1.12");
     expect(providerModel("cloudflare", "jev-latest")).toBe("typesafe/jev");
@@ -122,11 +125,11 @@ describe("createAsk", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test("openrouter: posts to the decisions endpoint with the mapped slug", async () => {
+  test("openrouter: posts the System One request with the Jev alias", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      expect(url).toBe("https://openrouter.ai/api/alpha/decisions");
+      expect(url).toBe("https://openrouter.ai/api/v1/systemone");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer sk-or-abc");
-      expect(JSON.parse(String(init?.body)).model).toBe(`typesafe/${OPENROUTER_LATEST}`);
+      expect(JSON.parse(String(init?.body))).toEqual({ model: "jev-latest", state: "s", questions });
       return jsonResponse({ answers: { q: { type: "noul", noul: 0.9 } } });
     });
     const notices: string[] = [];
@@ -145,6 +148,79 @@ describe("createAsk", () => {
     expect(result.usage).toEqual({ input_tokens: 0, output_tokens: 0 });
   });
 
+  test("openrouter: sends the preview model as a bare alias", async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body)).model).toBe("jev-preview");
+      return jsonResponse({ answers: { q: yes } });
+    });
+    const ask = createAsk({
+      provider: "openrouter",
+      model: "jev-preview",
+      timeoutMs: 5000,
+      env: { OPENROUTER_API_KEY: "sk-or-abc" },
+      fetch: fetchMock as unknown as typeof fetch,
+      notify: () => {},
+    });
+    await ask("s", questions);
+  });
+
+  test("openrouter: forwards Choice and Score answers and keeps the dated response model", async () => {
+    const typedQuestions = {
+      team: {
+        type: "choice",
+        instructions: "Which team?",
+        criteria: { billing: "refunds", tech: null },
+      },
+      tone: {
+        type: "score",
+        instructions: "How harsh?",
+        criteria: ["gentle", "direct", "harsh: hostile"],
+      },
+    };
+    const typedAnswers = {
+      team: {
+        type: "choice",
+        choice: "billing",
+        probabilities: { billing: 0.96, tech: 0.04 },
+        confidence: 0.96,
+      },
+      tone: {
+        type: "score",
+        score: 0.72,
+        confidence: 0.9,
+        legend: { "0": "gentle", "1": "direct", "2": "harsh: hostile" },
+        probabilities: { "0": 0.3, "1": 0.68, "2": 0.02 },
+      },
+    };
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe("https://openrouter.ai/api/v1/systemone");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        model: "jev-latest",
+        state: "A refund request with an irritated tone.",
+        questions: typedQuestions,
+      });
+      return jsonResponse({
+        model: "typesafe/jev-1.13-20260917",
+        answers: typedAnswers,
+        usage: { input_tokens: 18, output_tokens: 3, cost: 0.0001 },
+      });
+    });
+    const ask = createAsk({
+      provider: "openrouter",
+      model: "jev-latest",
+      timeoutMs: 5000,
+      env: { OPENROUTER_API_KEY: "sk-or-abc" },
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const result = await ask("A refund request with an irritated tone.", typedQuestions);
+    expect(result).toEqual({
+      answers: typedAnswers,
+      usage: { input_tokens: 18, output_tokens: 3 },
+      provider: "openrouter",
+      model: "typesafe/jev-1.13-20260917",
+    });
+  });
+
   test("openrouter: non-2xx becomes a readable error", async () => {
     const fetchMock = vi.fn(async () => new Response("rate limited", { status: 429 }));
     const ask = createAsk({
@@ -154,7 +230,7 @@ describe("createAsk", () => {
       env: { OPENROUTER_API_KEY: "sk-or-abc" },
       fetch: fetchMock as unknown as typeof fetch,
     });
-    await expect(ask("s", questions)).rejects.toThrow(/OpenRouter decisions API 429: rate limited/);
+    await expect(ask("s", questions)).rejects.toThrow(/OpenRouter System One API 429: rate limited/);
   });
 
   test("cloudflare: unwraps the v4 envelope and surfaces failures", async () => {

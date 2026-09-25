@@ -179,6 +179,17 @@ describe("config", () => {
     expect((await h.run(["config", "reset"], { env })).code).toBe(1);
   });
 
+  test("--provider explicitly selects OpenRouter even with an API key in the environment", async () => {
+    const r = await h.run(["config", "--json", "--provider", "openrouter"], {
+      env: { OPENROUTER_API_KEY: "sk-or-test", JEV_NO_STORED_CREDENTIALS: "1" },
+    });
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      config: { provider: "openrouter" },
+      resolved_provider: "openrouter",
+    });
+  });
+
   test("show without credentials reports the problem and exits 1", async () => {
     const r = await h.run(["config"], { noApi: true });
     expect(r.code).toBe(1);
